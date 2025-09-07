@@ -52,3 +52,64 @@ window.addEventListener('DOMContentLoaded', event => {
     });
 
 });
+
+ const form = document.getElementById("contactForm");
+  const successDiv = document.getElementById("successMessage");
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    let isValid = true;
+
+    // Campos
+    const name = document.getElementById("name");
+    const email = document.getElementById("email");
+    const phone = document.getElementById("phone");
+    const message = document.getElementById("message");
+
+    
+    // Regex email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // Resetear estados
+    [name, email, phone, message].forEach((field) => {
+      field.classList.remove("is-invalid");
+    });
+    successDiv.innerHTML = ""; // limpiar mensaje anterior
+
+    // Validaciones
+    if (name.value.trim() === "") {
+      name.classList.add("is-invalid");
+      isValid = false;
+    }
+
+    if (email.value.trim() === "" || !emailRegex.test(email.value.trim())) {
+      email.classList.add("is-invalid");
+      isValid = false;
+    }
+
+    if (phone.value.trim() === "") {
+      phone.classList.add("is-invalid");
+      isValid = false;
+    }
+
+    if (message.value.trim() === "") {
+      message.classList.add("is-invalid");
+      isValid = false;
+    }
+
+    // Si hay errores
+    if (!isValid) {
+      return;
+    }
+    
+    // Si todo está correcto → mostrar mensaje de éxito
+    successDiv.innerHTML = `
+      <div class="alert alert-success" role="alert">
+        ✅ Tu mensaje se envió correctamente.
+      </div>
+    `;
+
+    // Limpiar formulario
+    form.reset();
+  });
