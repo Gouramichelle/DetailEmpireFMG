@@ -6,12 +6,13 @@ import Team from './components/Team.jsx'
 import Contact from './components/Contact.jsx'
 import Footer from './components/Footer.jsx'
 import Reservas from './components/Reservas.jsx'
-
+import Auth from './components/Auth.jsx'
 export default function App() {
   return (
     <>
       <Navbar />
       <Header />
+      <Auth />
       <Services />
       <Portfolio />
       <Team />

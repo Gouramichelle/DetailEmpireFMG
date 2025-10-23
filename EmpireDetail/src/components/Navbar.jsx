@@ -35,6 +35,7 @@ export default function Navbar() {
             <li className="nav-item"><a className="nav-link" href="#services" onClick={closeCollapse}>Servicios</a></li>
             <li className="nav-item"><a className="nav-link" href="#portfolio" onClick={closeCollapse}>Trabajos</a></li>
             <li className="nav-item"><a className="nav-link" href="#team" onClick={closeCollapse}>Team</a></li>
+            <li className="nav-item"><a className="nav-link" href="#Auth" onClick={closeCollapse}>Login</a></li>
             <li className="nav-item"><a className="nav-link" href="#contact" onClick={closeCollapse}>Contacto</a></li>
           </ul>
         </div>
