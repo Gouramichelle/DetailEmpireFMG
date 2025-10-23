@@ -1,8 +1,6 @@
-// === src/components/Auth.jsx ===
+
 import React, { useState } from "react";
 
-// Bootstrap ya está en el proyecto (index.html + styles.css del theme).
-// Demo sin backend: guarda usuarios en localStorage y valida login localmente.
 const USER_KEY = "demo_users";
 const UserStore = {
   all() { try { return JSON.parse(localStorage.getItem(USER_KEY)) || []; } catch { return []; } },
