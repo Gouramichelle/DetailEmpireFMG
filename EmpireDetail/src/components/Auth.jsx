@@ -1,183 +1,293 @@
-
 import React, { useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
+import { useNavigate } from "react-router-dom";
 
-const USER_KEY = "demo_users";
-const UserStore = {
-  all() { try { return JSON.parse(localStorage.getItem(USER_KEY)) || []; } catch { return []; } },
-  save(list) { localStorage.setItem(USER_KEY, JSON.stringify(list)); },
-  add(user) { const list = UserStore.all(); list.push(user); UserStore.save(list); },
-  findByEmail(email) { return UserStore.all().find(u => u.email.toLowerCase() === email.toLowerCase()); }
-};
+const API_BASE_URL = "http://localhost:8080";
+const AUTH_API = `${API_BASE_URL}/api/auth`;
 
 export default function Auth() {
-  const [mode, setMode] = useState("login"); // "login" | "register" | "reset"
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
+  const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    setError("");
+    setSuccess("");
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    // Validaciones básicas según modo
+    if (mode === "register") {
+      if (!form.name || !form.email || !form.password) {
+        setError("Completa todos los campos requeridos.");
+        return;
+      }
+    } else if (mode === "login") {
+      if (!form.email || !form.password) {
+        setError("Ingresa tu email y contraseña.");
+        return;
+      }
+    } else if (mode === "forgot") {
+      if (!form.email) {
+        setError("Ingresa tu email para recuperar la contraseña.");
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      let endpoint = "";
+      let payload = {};
+
+      if (mode === "login") {
+        endpoint = "/login";
+        payload = {
+          email: form.email,
+          password: form.password,
+        };
+      } else if (mode === "register") {
+        endpoint = "/register";
+        payload = {
+          name: form.name,
+          email: form.email,
+          password: form.password,
+        };
+      } else if (mode === "forgot") {
+        endpoint = "/forgot-password";
+        payload = {
+          email: form.email,
+        };
+      }
+
+      const url = `${AUTH_API}${endpoint}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        let message = "Error de autenticación";
+
+        if (response.status === 401 || response.status === 403) {
+          message =
+            mode === "forgot"
+              ? "Si el correo existe, se enviaron instrucciones."
+              : "Correo o contraseña incorrectos.";
+        }
+
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            try {
+              const data = JSON.parse(errorText);
+              message = data.message || data.error || message;
+            } catch {
+              message = errorText;
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        throw new Error(message);
+      }
+
+      // forgot-password: solo mostramos mensaje y volvemos a login
+      if (mode === "forgot") {
+        const text = await response.text();
+        setSuccess(
+          text ||
+            "Si el correo existe, se enviaron instrucciones para recuperar tu contraseña."
+        );
+        setTimeout(() => {
+          setMode("login");
+          setSuccess("");
+        }, 2500);
+        return;
+      }
+
+      // login / register: esperamos JSON con token, etc.
+      const data = await response.json();
+      login(data);
+
+      if (mode === "register") {
+        setSuccess("Registro exitoso. Redirigiendo a tu perfil...");
+      } else {
+        setSuccess("Inicio de sesión exitoso. Redirigiendo a tu perfil...");
+      }
+
+      setTimeout(() => {
+        navigate("/profile");
+      }, 500);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Error de autenticación");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = () => {
+    setMode("forgot");
+    setError("");
+    setSuccess("");
+    setForm((prev) => ({ ...prev, password: "" }));
+  };
+
   return (
-    <section className="page-section" id="auth">
-      <div className="container" style={{maxWidth: 540}}>
-        <div className="text-center mb-4">
-          <h2 className="section-heading text-uppercase">
-            {mode === 'login' ? 'Inicia sesión' : mode === 'register' ? 'Crea tu cuenta' : 'Recuperar contraseña'}
-          </h2>
-          <p className="text-muted">
-            {mode === 'login' && <>¿Aún no tienes cuenta? <button className="btn btn-link p-0" onClick={() => setMode('register')}>Regístrate</button></>}
-            {mode === 'register' && <>¿Ya tienes cuenta? <button className="btn btn-link p-0" onClick={() => setMode('login')}>Inicia sesión</button></>}
-            {mode === 'reset' && <>¿Recordaste tu contraseña? <button className="btn btn-link p-0" onClick={() => setMode('login')}>Volver al login</button></>}
-          </p>
+    <section className="page-section" id="Auth">
+      <div className="container" style={{ maxWidth: 600 }}>
+        <h2 className="text-uppercase text-center mb-4">
+          {mode === "login"
+            ? "Iniciar sesión"
+            : mode === "register"
+            ? "Crear cuenta"
+            : "Recuperar contraseña"}
+        </h2>
+
+        {/* Tabs login / registro */}
+        <div className="d-flex justify-content-center mb-4">
+          <button
+            type="button"
+            className={`btn me-2 ${
+              mode === "login" ? "btn-warning" : "btn-outline-warning"
+            }`}
+            onClick={() => handleModeChange("login")}
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            className={`btn ${
+              mode === "register" ? "btn-warning" : "btn-outline-warning"
+            }`}
+            onClick={() => handleModeChange("register")}
+          >
+            Registrarme
+          </button>
         </div>
 
-        <div className="card shadow border-0">
-          <div className="card-body p-4 p-md-5">
-            {mode === 'login' && <Login onGoReset={() => setMode('reset')} />}
-            {mode === 'register' && <Register onRegistered={() => setMode('login')} />}
-            {mode === 'reset' && <Reset onDone={() => setMode('login')} />}
+        <div className="card shadow">
+          <div className="card-body">
+            {error && (
+              <div className="alert alert-danger" role="alert">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="alert alert-success" role="alert">
+                {success}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} noValidate>
+              {mode === "register" && (
+                <div className="mb-3">
+                  <label className="form-label">Nombre</label>
+                  <input
+                    type="text"
+                    name="name"
+                    className="form-control"
+                    value={form.name}
+                    onChange={handleChange}
+                    placeholder="Tu nombre"
+                  />
+                </div>
+              )}
+
+              <div className="mb-3">
+                <label className="form-label">Email</label>
+                <input
+                  type="email"
+                  name="email"
+                  className="form-control"
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="tucorreo@dominio.com"
+                />
+              </div>
+
+              {(mode === "login" || mode === "register") && (
+                <>
+                  <div className="mb-1">
+                    <label className="form-label">Contraseña</label>
+                    <input
+                      type="password"
+                      name="password"
+                      className="form-control"
+                      value={form.password}
+                      onChange={handleChange}
+                      placeholder="••••••••"
+                    />
+                  </div>
+
+                  {mode === "login" && (
+                    <div className="mb-3 text-end">
+                      <button
+                        type="button"
+                        className="btn btn-link p-0"
+                        style={{ fontSize: "0.9rem" }}
+                        onClick={handleForgotPassword}
+                      >
+                        ¿Olvidaste tu contraseña?
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {mode === "forgot" && (
+                <p className="mb-3 text-muted" style={{ fontSize: "0.9rem" }}>
+                  Ingresa tu correo y, si existe en el sistema, se enviarán
+                  instrucciones para recuperar tu contraseña.
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="btn btn-warning w-100 text-uppercase"
+                disabled={loading}
+              >
+                {loading
+                  ? "Procesando..."
+                  : mode === "login"
+                  ? "Entrar"
+                  : mode === "register"
+                  ? "Registrarme"
+                  : "Enviar instrucciones"}
+              </button>
+            </form>
           </div>
         </div>
+
+        <p className="text-center mt-3 text-muted">
+          Una vez autenticado, podrás gestionar tus vehículos, revisar tus
+          reservas y, si eres administrador, administrar los servicios.
+        </p>
       </div>
     </section>
   );
 }
-
-function Alert({ type = "danger", children }) {
-  return <div className={`alert alert-${type} small`} role="alert">{children}</div>;
-}
-function FormGroup({ label, error, hint, children }) {
-  return (
-    <div className="mb-3">
-      <label className="form-label mb-1">{label}</label>
-      {children}
-      <div className="form-text">{error ? <span className="text-danger">{error}</span> : hint || null}</div>
-    </div>
-  );
-}
-function SubmitButton({ loading, children }) {
-  return (
-    <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-      {loading && <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>}
-      {loading ? "Procesando..." : children}
-    </button>
-  );
-}
-function PasswordInput({ value, onChange, id, placeholder = "••••••" }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="input-group">
-      <input id={id} type={show ? "text" : "password"} className="form-control" value={value} onChange={onChange} placeholder={placeholder} />
-      <button type="button" className="btn btn-outline-secondary" onClick={() => setShow(s => !s)}>
-        {show ? "Ocultar" : "Mostrar"}
-      </button>
-    </div>
-  );
-}
-function useForm(initial) {
-  const [values, setValues] = useState(initial);
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [serverError, setServerError] = useState("");
-  const [serverOk, setServerOk] = useState("");
-  function handleChange(e) { const { name, value } = e.target; setValues(v => ({ ...v, [name]: value })); }
-  return { values, setValues, errors, setErrors, loading, setLoading, serverError, setServerError, serverOk, setServerOk, handleChange };
-}
-
-function Login({ onGoReset }) {
-  const { values, errors, setErrors, loading, setLoading, serverError, setServerError, handleChange } = useForm({ email: "", password: "" });
-  async function onSubmit(e) {
-    e.preventDefault(); setServerError("");
-    const nextErrors = {}; if (!values.email) nextErrors.email = "Requerido"; if (!values.password) nextErrors.password = "Requerido";
-    setErrors(nextErrors); if (Object.keys(nextErrors).length) return;
-    try {
-      setLoading(true);
-      const found = UserStore.findByEmail(values.email);
-      if (!found || found.password !== values.password) throw new Error("Credenciales inválidas");
-      alert(`¡Bienvenido ${found.name || found.email}! (demo local)`);
-    } catch (err) { setServerError(err.message || "Error al iniciar sesión"); }
-    finally { setLoading(false); }
-  }
-  return (
-    <form onSubmit={onSubmit} noValidate>
-      {serverError && <Alert>{serverError}</Alert>}
-      <FormGroup label="Email" error={errors.email}>
-        <input name="email" type="email" className="form-control" autoComplete="email" value={values.email} onChange={handleChange} placeholder="tucorreo@dominio.com" />
-      </FormGroup>
-      <FormGroup label="Contraseña" error={errors.password} hint="Mínimo 6 caracteres">
-        <PasswordInput id="login-password" value={values.password} onChange={(e) => handleChange({ target: { name: "password", value: e.target.value } })} />
-      </FormGroup>
-      <div className="d-flex justify-content-end mb-3">
-        <button type="button" className="btn btn-link p-0" onClick={onGoReset}>¿Olvidaste tu contraseña?</button>
-      </div>
-      <SubmitButton loading={loading}>Entrar</SubmitButton>
-    </form>
-  );
-}
-
-function Register({ onRegistered }) {
-  const { values, errors, setErrors, loading, setLoading, serverError, setServerError, serverOk, setServerOk, handleChange } = useForm({ name: "", email: "", password: "", confirm: "" });
-  async function onSubmit(e) {
-    e.preventDefault(); setServerError(""); setServerOk("");
-    const nextErrors = {};
-    if (!values.name) nextErrors.name = "Requerido";
-    if (!values.email) nextErrors.email = "Requerido";
-    if (!values.password) nextErrors.password = "Requerido";
-    if (!values.confirm) nextErrors.confirm = "Requerido";
-    if (values.password && values.password.length < 6) nextErrors.password = "Mínimo 6 caracteres";
-    if (values.confirm && values.confirm !== values.password) nextErrors.confirm = "No coincide";
-    if (values.email && UserStore.findByEmail(values.email)) nextErrors.email = "Ya existe un usuario con este email";
-    setErrors(nextErrors); if (Object.keys(nextErrors).length) return;
-    try {
-      setLoading(true);
-      UserStore.add({ name: values.name, email: values.email, password: values.password });
-      setServerOk("¡Registro exitoso! Ya puedes iniciar sesión.");
-      onRegistered?.();
-    } catch (err) { setServerError(err.message || "Error al registrar"); }
-    finally { setLoading(false); }
-  }
-  return (
-    <form onSubmit={onSubmit} noValidate>
-      {serverError && <Alert>{serverError}</Alert>}
-      {serverOk && <Alert type="success">{serverOk}</Alert>}
-      <FormGroup label="Nombre" error={errors.name}>
-        <input name="name" type="text" className="form-control" autoComplete="name" value={values.name} onChange={handleChange} placeholder="Tu nombre" />
-      </FormGroup>
-      <FormGroup label="Email" error={errors.email}>
-        <input name="email" type="email" className="form-control" autoComplete="email" value={values.email} onChange={handleChange} placeholder="tucorreo@dominio.com" />
-      </FormGroup>
-      <FormGroup label="Contraseña" error={errors.password} hint="Mínimo 6 caracteres">
-        <PasswordInput id="register-password" value={values.password} onChange={(e) => handleChange({ target: { name: "password", value: e.target.value } })} />
-      </FormGroup>
-      <FormGroup label="Confirmar contraseña" error={errors.confirm}>
-        <PasswordInput id="register-confirm" value={values.confirm} onChange={(e) => handleChange({ target: { name: "confirm", value: e.target.value } })} />
-      </FormGroup>
-      <SubmitButton loading={loading}>Crear cuenta</SubmitButton>
-      <p className="text-muted small mt-3 mb-0">Al registrarte, aceptas nuestros <a href="#">Términos</a> y <a href="#">Política de privacidad</a>.</p>
-    </form>
-  );
-}
-
-function Reset({ onDone }) {
-  const { values, errors, setErrors, loading, setLoading, serverError, setServerError, serverOk, setServerOk, handleChange } = useForm({ email: "" });
-  async function onSubmit(e) {
-    e.preventDefault(); setServerError(""); setServerOk("");
-    const nextErrors = {}; if (!values.email) nextErrors.email = "Requerido";
-    setErrors(nextErrors); if (Object.keys(nextErrors).length) return;
-    try {
-      setLoading(true);
-      const user = UserStore.findByEmail(values.email);
-      if (!user) throw new Error("No existe un usuario con ese email");
-      setServerOk("Te enviamos un enlace de recuperación (demo). Revisa tu correo.");
-    } catch (err) { setServerError(err.message || "No se pudo procesar la solicitud"); }
-    finally { setLoading(false); }
-  }
-  return (
-    <form onSubmit={onSubmit} noValidate>
-      {serverError && <Alert>{serverError}</Alert>}
-      {serverOk && <Alert type="success">{serverOk}</Alert>}
-      <FormGroup label="Email" error={errors.email}>
-        <input name="email" type="email" className="form-control" autoComplete="email" value={values.email} onChange={handleChange} placeholder="tucorreo@dominio.com" />
-      </FormGroup>
-      <SubmitButton loading={loading}>Enviar enlace</SubmitButton>
-      <div className="text-end mt-3">
-        <button type="button" className="btn btn-link p-0" onClick={onDone}>Volver al login</button>
-      </div>
-    </form>
-  );
-}
-
